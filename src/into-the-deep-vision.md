@@ -147,7 +147,7 @@ You are giving the function a reference to ```ycrcb_image```{.java} and the func
   ```java
   Imgproc.cvtColor(input_undistort, input_undistort, Imgproc.COLOR_RGB2YCrCb);
   ```
-  This will become useful when filtering colors, because the colors of the samples are much easier to seperate in this colorspace
+  This will become useful when filtering colors, because the colors of the samples are much easier to separate in this colorspace
   
 ## Color Filtering
 ```{.java}
@@ -241,6 +241,9 @@ We do the same for the second point, except using a weighted combination of thei
   }
   ```
 
+Here's a visualisation of the algorithm:
+![A visualisation of the algorithm for getting the top corners](GetTopPointsDemo.gif)
+
 ## Calculating the Sample's Pose
 Now that we have the sample's top two corners, we can get some more information about it.
 
@@ -262,7 +265,7 @@ This is what the math does:
 - To get the center coordinate:
   1. Get the slope between the points, rotated $90º$, using $\frac{-(a_x-b_x)}{a_y-b_y}$
   2. Create a unit vector based off of this slope, $\frac{\begin{bmatrix}1\\\mathrm {slope}\end{bmatrix}}{\sqrt{1 + \mathrm{slope}^2}}$
-  3. If the vector points upwards, multiply it by $-1$ to make it point downards instead.
+  3. If the vector points upwards, multiply it by $-1$ to make it point downwards instead.
   4. Scale the vector by $\frac{1.5 \mathrm{in}}{2}$ if it's a long side or $\frac{3.5 \mathrm{in}}{2}$ if it's a short side
   5. Add the vector to the center of points $a$ and $b$, giving $\mathrm{center} = 
   \begin{bmatrix}
