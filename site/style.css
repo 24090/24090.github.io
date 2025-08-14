@@ -5,8 +5,9 @@
     }
 }
 body {
+    padding: 0rem;
     margin-top: 0rem;
-    font-size: 1.1rem;
+    font-size: 1.15rem;
     background-color: #fff;
     color: #111;
     @media (max-width: 45rem){
@@ -23,13 +24,37 @@ main {
 }
 
 h1 {
-    width: min-content;
     margin-left: auto; margin-right: auto;
     margin-bottom: inherit;
+    width: 100%;
+    text-align: center;
 }
 
 hr {
     width: calc(var(--main-width) - 5rem)
+}
+
+pre.wrap-text > code, pre.wrap-text > code.sourceCode{
+    text-wrap-mode: wrap;
+}
+
+div.sourceCode {
+    background-color: white;
+    padding: 1rem;
+}
+
+section.infobox{
+    background-color: #eef;
+    border: 0.1rem solid #111; 
+    padding: 1rem;
+}
+
+img {
+    margin: auto;
+    max-width: min(30rem, 80vw);
+    max-height: 45vh;
+    object-fit: scale-down;
+    display: block;
 }
 
 /* Pandoc CSS for syntax highlighting */

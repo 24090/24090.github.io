@@ -7,7 +7,7 @@
 This is a place to share programming related stuff we produce
 
 ## Articles
-none... yet
+### [A Vision System for Into the Deep](into-the-deep-vision.html)
 
 ## Libraries
 none... yet

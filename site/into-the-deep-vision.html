@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>A Vision System for Into the Deep | 24090</title>
+        <meta charset="UTF-8"> 
+        <link rel = "stylesheet" href = "/style.css">
+    </head>
+    <body>
+        <main>
+            <h1 id="a-vision-system-for-into-the-deep">A Vision System
+            for Into the Deep</h1>
+            <h2 id="overview">Overview</h2>
+            <p>Our system can be split into two components, namely,
+            detecting samples in the image and getting the world
+            coordinates of those samples. The system uses color
+            filtering and an algorithm based on finding key points for
+            the former and reprojection for the latter. Other approaches
+            for sample detection include using machine learning, and
+            alternatives to reprojection include repeatedly moving the
+            robot and rechecking until the sample is at a certain point
+            in its vision.</p>
+            <h2 id="physical-setup">Physical Setup</h2>
+            <p>When using reprojection, it’s very important to know the
+            precise location of your camera, in terms of both position
+            and rotation. These values are called
+            <strong><em>extrinsics</em></strong>. Some advice on doing
+            this:</p>
+            <ul class="incremental">
+            <li>Keep the camera still (i.e. not on any sort of arm) if
+            possible. You can still use reprojection if you don’t, but
+            it will make it less precise and more complex.</li>
+            <li>Mount your camera well. The camera should be screwed in
+            tightly, and only wiggle a couple of millimeters if it gets
+            hit. We used a Logitech C270, and since there’s no way to
+            screw in the camera anywhere, we disassembled the camera and
+            designed a custom case.</li>
+            <li>Know the position of your camera <strong><em>in
+            CAD</em></strong>. This helps because it is more precise,
+            but it also means you have one less thing to check when
+            debugging.</li>
+            </ul>
+            <h2 id="code-setup">Code Setup</h2>
+            <p>We used <a
+            href="https://github.com/OpenFTC/EasyOpenCV">EasyOpenCV</a>
+            because it is provided by default. <a
+            href="https://github.com/acmerobotics/ftc-dashboard">FTC
+            Dashboard</a> was useful for tuning the color filter with
+            live feedback. If you’re using RoadRunner or Pedropathing,
+            you probably already have FTC Dashboard or Panels (which is
+            similar). <a href="https://github.com/deltacv/EOCV-Sim">EOCV
+            Sim</a> is very useful for quick iteration and testing
+            without access to your robot.</p>
+            <h2 id="camera-calibration">Camera Calibration</h2>
+            <p>In camera calibration, we basically try to find some
+            numbers that describe the camera. These are the focal
+            lengths
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>f</mi><mi>x</mi></msub><mo>,</mo><msub><mi>f</mi><mi>y</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(f_x, f_y)</annotation></semantics></math>,
+            principle point
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>c</mi><mi>x</mi></msub><mo>,</mo><msub><mi>c</mi><mi>y</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">(c_x, c_y)</annotation></semantics></math>,
+            and distortion coefficients
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">[</mo><msub><mi>k</mi><mn>1</mn></msub><mi>.</mi><mi>.</mi><mi>.</mi><msub><mi>k</mi><mi>n</mi></msub><mo stretchy="false" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">[k_1 ... k_n]</annotation></semantics></math>.
+            If you want to understand what these actually are, there’s
+            some <a
+            href="https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html">information</a>
+            on the OpenCV docs.</p>
+            <p>Camera calibration involves taking images of a surface
+            from which a computer can gain a lot of data, and then
+            putting it into a program which tries to create calibration
+            numbers that match the data. The official FTC documentation
+            provides <a
+            href="https://ftc-docs.firstinspires.org/en/latest/programming_resources/vision/camera_calibration/camera-calibration.html#calibrating-with-3df-zephyr">information
+            about doing this with 3DF Zephyr</a>, but this is only
+            available for Windows. What we ended up doing was using <a
+            href="https://github.com/smidm/video2calibration">video2calibration</a>,
+            which allows you to take input a video and then get camera
+            calibration data. Note that the program will output
+            something called a “camera matrix” like this:</p>
+            <pre class="wrap-text"><code>camera matrix:
+[[ 774.6  0.     619.7 ]
+ [ 0.     773.0  352.5 ]
+ [ 0.     0.     1.    ]]</code></pre>
+            <p>this corresponds to
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><msub><mi>f</mi><mi>x</mi></msub></mtd><mtd columnalign="center" style="text-align: center"><mn>0</mn></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>c</mi><mi>x</mi></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mn>0</mn></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>f</mi><mi>y</mi></msub></mtd><mtd columnalign="center" style="text-align: center"><msub><mi>c</mi><mi>y</mi></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mn>0</mn></mtd><mtd columnalign="center" style="text-align: center"><mn>0</mn></mtd><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow><annotation encoding="application/x-tex">\begin{bmatrix} f_x &amp; 0 &amp; c_x \\ 0 &amp; f_y &amp; c_y \\ 0 &amp; 0 &amp; 1 \\ \end{bmatrix}</annotation></semantics></math>,
+            so in this case
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>x</mi></msub><mo>=</mo><mn>774.6</mn></mrow><annotation encoding="application/x-tex">f_x = 774.6</annotation></semantics></math>,
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>f</mi><mi>y</mi></msub><mo>=</mo><mn>773.0</mn></mrow><annotation encoding="application/x-tex">f_y = 773.0</annotation></semantics></math>,
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>x</mi></msub><mo>=</mo><mn>619.7</mn></mrow><annotation encoding="application/x-tex">c_x = 619.7</annotation></semantics></math>,
+            and
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>y</mi></msub><mo>=</mo><mn>352.5</mn></mrow><annotation encoding="application/x-tex">c_y = 352.5</annotation></semantics></math></p>
+            <p>Once you have your focal lengths, principal point, and
+            distortion coefficients, there are still some things things
+            left to do:</p>
+            <ol class="incremental">
+            <li>Compute some constants that depend on the focal lengths,
+            principal point, and extrinsics matrix:
+            <ol class="incremental" type="a">
+            <li>The projection matrix, which is used for debugging. It
+            helps display world coordinates on the screen</li>
+            <li>The reprojection matrix, which is at the center of our
+            vision approach. It converts screen coordinates to world
+            coordinates</li>
+            </ol></li>
+            <li>Put all these numbers into a java file in a way that
+            OpenCV can read them</li>
+            </ol>
+            <h3 id="our-python-script">Our Python Script</h3>
+            <p>We created a <a
+            href="https://github.com/24090/IntoTheDeep/blob/main/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/vision/ReprojectionMatrixCalculator.py">python
+            script</a> to complete all these steps (it’s not fun to do
+            those things again every time you move your camera or
+            recalibrate it).</p>
+            <p>How the script works:</p>
+            <ol class="incremental" type="1">
+            <li>Gets constants from user</li>
+            </ol>
+            <div class="sourceCode" id="cb2"><pre
+            class="sourceCode numberSource python numberLines"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1"></a>focal_length       <span class="op">=</span> (f_x, f_y) <span class="co"># replace these values with the intrinsics</span></span>
+<span id="cb2-2"><a href="#cb2-2"></a>principal_point    <span class="op">=</span> (c_x, c_y) <span class="co"># and these ones</span></span>
+<span id="cb2-3"><a href="#cb2-3"></a>distortion         <span class="op">=</span> [ k_1 ... k_n ] <span class="co"># and these ones</span></span>
+<span id="cb2-4"><a href="#cb2-4"></a></span>
+<span id="cb2-5"><a href="#cb2-5"></a>rotation_xyz_euler <span class="op">=</span> [rotation_x, rotation_y, rotation_z] <span class="co"># replace these values with the extrinsics</span></span>
+<span id="cb2-6"><a href="#cb2-6"></a>position           <span class="op">=</span> [x, y, z <span class="op">-</span> <span class="fl">1.5</span>] <span class="co"># and these ones</span></span>
+<span id="cb2-7"><a href="#cb2-7"></a><span class="co"># The -1.5 means we want to look 1.5 inches above the ground (at the top of samples)</span></span>
+<span id="cb2-8"><a href="#cb2-8"></a>degrees            <span class="op">=</span> <span class="va">True</span> <span class="co"># if the rotation values are in degrees (as opposed to radians)</span></span></code></pre></div>
+            <ol class="incremental" start="2" type="1">
+            <li>Calculates projection and reprojection matrices</li>
+            </ol>
+            <div class="sourceCode" id="cb3"><pre
+            class="sourceCode numberSource python numberLines"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1"></a>intrinsics_matrix <span class="op">=</span> ... <span class="co"># 3x3 matrix determined by focal_lengths and principal_point</span></span>
+<span id="cb3-2"><a href="#cb3-2"></a>extrinsics_matrix <span class="op">=</span> ... <span class="co"># 3x3 matrix determined by extrinsics</span></span>
+<span id="cb3-3"><a href="#cb3-3"></a></span>
+<span id="cb3-4"><a href="#cb3-4"></a>projection_matrix <span class="op">=</span> (intrinsics_matrix <span class="op">@</span> extrinsics_matrix)[:, [<span class="dv">0</span>,<span class="dv">1</span>,<span class="dv">3</span>]] <span class="co"># 3x3 matrix, product of intrinsics and extrinsics matrix</span></span>
+<span id="cb3-5"><a href="#cb3-5"></a>reprojection_matrix <span class="op">=</span> np.linalg.inv(projection_matrix) <span class="co"># 3x3 matrix, inverse of projection matrix</span></span></code></pre></div>
+            <ol class="incremental" start="3" type="1">
+            <li>Generates code and places it between comments in
+            Camera.java</li>
+            </ol>
+            <div class="sourceCode" id="cb4"><pre
+            class="sourceCode numberSource python numberLines"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1"></a>code <span class="op">=</span> <span class="st">&quot;// generated with ReprojectionMatrixCalculator.py</span><span class="ch">\n</span><span class="st">&quot;</span> <span class="co"># put in leading comment</span></span>
+<span id="cb4-2"><a href="#cb4-2"></a><span class="cf">for</span> row_num <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">3</span>): <span class="co"># put in projection matrix</span></span>
+<span id="cb4-3"><a href="#cb4-3"></a>  code <span class="op">+=</span> <span class="ss">f&quot;pm.put(...&quot;</span></span>
+<span id="cb4-4"><a href="#cb4-4"></a>code <span class="op">+=</span> <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span></span>
+<span id="cb4-5"><a href="#cb4-5"></a><span class="cf">for</span> row_num <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">3</span>): <span class="co"># put in reprojection matrix</span></span>
+<span id="cb4-6"><a href="#cb4-6"></a>  code <span class="op">+=</span> <span class="ss">f&quot;rm.put(...&quot;</span></span>
+<span id="cb4-7"><a href="#cb4-7"></a>code <span class="op">+=</span> <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span></span>
+<span id="cb4-8"><a href="#cb4-8"></a><span class="cf">for</span> row_num <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">3</span>): <span class="co"># put in camera matrix</span></span>
+<span id="cb4-9"><a href="#cb4-9"></a>  code <span class="op">+=</span> <span class="ss">f&quot;cm.put(...&quot;</span></span>
+<span id="cb4-10"><a href="#cb4-10"></a>code <span class="op">+=</span> <span class="st">&quot;</span><span class="ch">\n</span><span class="st">&quot;</span></span>
+<span id="cb4-11"><a href="#cb4-11"></a><span class="cf">for</span> col_num, value <span class="kw">in</span> <span class="bu">enumerate</span>(distortion): <span class="co"># put in distortion matrix</span></span>
+<span id="cb4-12"><a href="#cb4-12"></a>  code <span class="op">+=</span> <span class="ss">f&quot;</span><span class="ch">\t\t</span><span class="ss">dc.put(0, </span><span class="sc">{</span>col_num<span class="sc">}</span><span class="ss">, </span><span class="sc">{</span>value<span class="sc">: e}</span><span class="ss">);</span><span class="ch">\n</span><span class="ss">&quot;</span></span>
+<span id="cb4-13"><a href="#cb4-13"></a>code <span class="op">+=</span> <span class="st">&quot;</span><span class="ch">\t\t</span><span class="st">// end&quot;</span> <span class="co"># put in trailing comment</span></span>
+<span id="cb4-14"><a href="#cb4-14"></a></span>
+<span id="cb4-15"><a href="#cb4-15"></a>text <span class="op">=</span> <span class="bu">open</span>(<span class="st">&quot;Camera.java&quot;</span>, <span class="st">&quot;r&quot;</span>).read() <span class="co"># reads from Camera.java</span></span>
+<span id="cb4-16"><a href="#cb4-16"></a><span class="co"># isolate the old code between the leading and trailing comment</span></span>
+<span id="cb4-17"><a href="#cb4-17"></a>text <span class="op">=</span> text.replace(<span class="st">&quot;// generated with ReprojectionMatrixCalculator.py&quot;</span>, <span class="st">&quot;RMC_SPLIT&quot;</span>)</span>
+<span id="cb4-18"><a href="#cb4-18"></a>text <span class="op">=</span> text.replace(<span class="st">&quot;// end&quot;</span>, <span class="st">&quot;RMC_SPLIT&quot;</span>)</span>
+<span id="cb4-19"><a href="#cb4-19"></a>text <span class="op">=</span> text.split(<span class="st">&quot;RMC_SPLIT&quot;</span>) </span>
+<span id="cb4-20"><a href="#cb4-20"></a><span class="co"># replace it with the new code </span></span>
+<span id="cb4-21"><a href="#cb4-21"></a>text[<span class="dv">1</span>] <span class="op">=</span> code</span>
+<span id="cb4-22"><a href="#cb4-22"></a><span class="co"># ask to save changes</span></span>
+<span id="cb4-23"><a href="#cb4-23"></a><span class="cf">if</span> (<span class="bu">input</span>(<span class="st">&quot;autoreplace? &quot;</span>) <span class="op">==</span> <span class="st">&quot;y&quot;</span>):</span>
+<span id="cb4-24"><a href="#cb4-24"></a>  <span class="bu">open</span>(<span class="st">&quot;Camera.java&quot;</span>, <span class="st">&quot;w&quot;</span>).write(<span class="st">&quot;&quot;</span>.join(text))</span></code></pre></div>
+            <section id="to-use-it-for-yourself" class="infobox">
+            <h3>To use it for yourself:</h3>
+            <ul class="incremental">
+            <li>Put <a
+            href="https://github.com/24090/IntoTheDeep/blob/main/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/vision/ReprojectionMatrixCalculator.py">the
+            script</a> in whatever folder your using for your vision
+            code</li>
+            <li>Input your constants at the top of the script</li>
+            <li>Put our <a
+            href="https://github.com/24090/IntoTheDeep/blob/main/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/vision/Camera.java">Camera.java
+            file</a> in the same folder. Feel free to modify and
+            redistribute either of these scripts.</li>
+            </ul>
+            </section>
+            <h2 id="writing-code-with-easyopencv">Writing Code with
+            EasyOpenCV</h2>
+            <p>Now, we have all the data we need, and can move on to
+            coding our algorithm. But when writing code with EasyOpenCV,
+            there are a few things to keep in mind.</p>
+            <h3 id="setting-up-the-codebase">Setting up the
+            Codebase</h3>
+            <p>This involves initialising your camera and the concept of
+            a “pipeline”. Refer to the <a
+            href="https://github.com/OpenFTC/EasyOpenCV?tab=readme-ov-file#documentation">EasyOpenCV
+            documentation</a>.</p>
+            <h3 id="preventing-memory-leaks">Preventing Memory
+            Leaks</h3>
+            <p>If you create a <code class="sourceCode java">Mat</code>
+            during the main loop, you will get warnings telling you
+            about memory leaks. To resolve this, initialise all your
+            <code class="sourceCode java">Mat</code>s at the top of your
+            pipeline, like this:</p>
+            <div class="sourceCode" id="cb5"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="kw">public</span> <span class="kw">class</span> SampleLocationPipeline <span class="kw">extends</span> OpenCvPipeline <span class="op">{</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="kw">...</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    Mat input_undistort <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    Mat color_mask_upper <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    Mat color_mask <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    Mat color_filtered_image <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>    Mat output <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    <span class="dt">final</span> Mat empty_mat <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    Mat hierarchy <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    Mat greyscale <span class="op">=</span> <span class="kw">new</span> <span class="fu">Mat</span><span class="op">();</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">...</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="kw">public</span> Mat <span class="fu">processFrame</span><span class="op">(</span>Mat input<span class="op">)</span> <span class="op">{</span></span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        <span class="kw">...</span></span></code></pre></div>
+            <h3 id="pass-by-reference">Pass By Reference</h3>
+            <p>When using OpenCV functions, for example <code
+            class="sourceCode java">Imgproc<span class="op">.</span><span class="fu">cvtColor</span></code>,
+            you will assign variables without using <code>=</code> sign.
+            Instead of writing things like</p>
+            <div class="sourceCode" id="cb6"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>Mat ycrcb_image <span class="op">=</span> Imgproc<span class="op">.</span><span class="fu">cvtColor</span><span class="op">(</span>rgb_image<span class="op">,</span> Imgproc<span class="op">.</span><span class="fu">COLOR_RGB2YCrCb</span><span class="op">)</span></span></code></pre></div>
+            <p>you write things like</p>
+            <div class="sourceCode" id="cb7"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>Mat ycrcb_image<span class="op">;</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="kw">...</span> <span class="co">//                      Passed by reference</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">cvtColor</span><span class="op">(</span>rgb_image<span class="op">,</span> ycrcb_image<span class="op">,</span>        Imgproc<span class="op">.</span><span class="fu">COLOR_RGB2YCrCb</span><span class="op">)</span></span></code></pre></div>
+            <p>You are giving the function a reference to <code
+            class="sourceCode java">ycrcb_image</code> and the function
+            is handling the “assignment” for you.</p>
+            <h2 id="initial-processing">Initial Processing</h2>
+            <ol class="incremental" type="1">
+            <li>Undistort image using distortion coefficients</li>
+            </ol>
+            <div class="sourceCode" id="cb8"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>Calib3d<span class="op">.</span><span class="fu">undistort</span><span class="op">(</span>input<span class="op">,</span> input_undistort<span class="op">,</span> Camera<span class="op">.</span><span class="fu">camera_matrix</span><span class="op">,</span> Camera<span class="op">.</span><span class="fu">distortion_coefficients</span><span class="op">);</span></span></code></pre></div>
+            <p>This allows us to use the image accurately later on.</p>
+            <ol class="incremental" start="2" type="1">
+            <li>RGB -&gt; <a
+            href="https://en.wikipedia.org/wiki/YCbCr">YCbCr</a></li>
+            </ol>
+            <div class="sourceCode" id="cb9"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">cvtColor</span><span class="op">(</span>input_undistort<span class="op">,</span> input_undistort<span class="op">,</span> Imgproc<span class="op">.</span><span class="fu">COLOR_RGB2YCrCb</span><span class="op">);</span></span></code></pre></div>
+            <p>This will become useful when filtering colors, because
+            the colors of the samples are much easier to seperate in
+            this colorspace</p>
+            <h2 id="color-filtering">Color Filtering</h2>
+            <div class="sourceCode" id="cb10"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">switch</span> <span class="op">(</span>color<span class="op">)</span> <span class="op">{</span> <span class="co">// Decide what to do based on the color</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> RED<span class="op">:</span></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>        <span class="co">// make sure colors are in this range</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>        Core<span class="op">.</span><span class="fu">inRange</span><span class="op">(</span>input_undistort<span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">red_min</span><span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">red_max</span><span class="op">,</span> color_mask<span class="op">);</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> BLUE<span class="op">:</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>        Core<span class="op">.</span><span class="fu">inRange</span><span class="op">(</span>input_undistort<span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">blue_min</span><span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">blue_max</span><span class="op">,</span> color_mask<span class="op">);</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">case</span> YELLOW<span class="op">:</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>        Core<span class="op">.</span><span class="fu">inRange</span><span class="op">(</span>input_undistort<span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">yellow_min</span><span class="op">,</span> Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">yellow_max</span><span class="op">,</span> color_mask<span class="op">);</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>        <span class="cf">break</span><span class="op">;</span> </span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+            <p>Note that <code
+            class="sourceCode java">Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">red_min</span></code>,
+            <code
+            class="sourceCode java">Camera<span class="op">.</span><span class="fu">ColorValues</span><span class="op">.</span><span class="fu">blue_max</span></code>,
+            etc. are 3 values packaged together in <code
+            class="sourceCode java">Scalar</code>s, each component
+            representing Y, Cr and Cb respectively. YCrCb is a very
+            helpful color space to do this in, because essentially:</p>
+            <ul class="incremental">
+            <li>Blue -&gt; High Cb</li>
+            <li>Red -&gt; High Cr</li>
+            <li>Yellow -&gt; Low Cb</li>
+            </ul>
+            <p>Tuning with YCrCb was much easier than HSV in our
+            experience. Using FTC Dashboard, Panels, or EOCV Sim with
+            the camera plugged into your computer means you can tune
+            these mins and maxes with live feedback, making the process
+            quick (and you <strong><em>need</em></strong> to be quick in
+            order to retune for lighting conditions at
+            competitions).</p>
+            <p>The result of this process is a black and white image
+            (<code class="sourceCode java">color_mask</code>), based on
+            whether or not the color was in the color range.</p>
+            <h2 id="morphology">Morphology</h2>
+            <p>After we’ve filtered for colors, there is still random
+            noise in our image that can mess up later steps.</p>
+            <div class="sourceCode" id="cb11"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">erode</span><span class="op">(</span>color_mask<span class="op">,</span> color_mask<span class="op">,</span> empty_mat<span class="op">,</span> <span class="kw">new</span> <span class="bu">Point</span><span class="op">(-</span><span class="dv">1</span><span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">),</span> <span class="dv">5</span><span class="op">);</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">dilate</span><span class="op">(</span>color_mask<span class="op">,</span> color_mask<span class="op">,</span> empty_mat<span class="op">,</span> <span class="kw">new</span> <span class="bu">Point</span><span class="op">(-</span><span class="dv">1</span><span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">),</span> <span class="dv">10</span><span class="op">);</span></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">erode</span><span class="op">(</span>color_mask<span class="op">,</span> color_mask<span class="op">,</span> empty_mat<span class="op">,</span> <span class="kw">new</span> <span class="bu">Point</span><span class="op">(-</span><span class="dv">1</span><span class="op">,</span> <span class="op">-</span><span class="dv">1</span><span class="op">),</span> <span class="dv">5</span><span class="op">);</span></span></code></pre></div>
+            <p>This basically contracts, expands, and contracts the
+            white parts of the black and white image. The end result of
+            this process is that any small blobs of white are removed,
+            and any large blobs are essentially unchanged. After this,
+            we don’t have to worry so much about random noise.</p>
+            <h2 id="contours">Contours</h2>
+            <div class="sourceCode" id="cb12"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>Imgproc<span class="op">.</span><span class="fu">findContours</span><span class="op">(</span>color_mask<span class="op">,</span> contours<span class="op">,</span> hierarchy<span class="op">,</span> Imgproc<span class="op">.</span><span class="fu">RETR_EXTERNAL</span><span class="op">,</span>Imgproc<span class="op">.</span><span class="fu">CHAIN_APPROX_NONE</span> <span class="op">);</span></span></code></pre></div>
+            <p>This function gives us the outlines (i.e. a list of
+            points on the edge) of all the different blobs on the image
+            before.</p>
+            <h2 id="getting-top-points">Getting Top Points</h2>
+            <p>This is (as far as i know) the most unique part of our
+            approach. We first find the two top (from which we can later
+            “solve” the sample). How do we find those points though?</p>
+            <p>We know four things about the top corner points:</p>
+            <ol class="incremental" type="1">
+            <li>They are in our list of points (contour) from
+            before</li>
+            <li>They have high y values (optimize
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mi>o</mi><mi>i</mi><mi>n</mi><msub><mi>t</mi><mi>y</mi></msub></mrow><annotation encoding="application/x-tex">point_y</annotation></semantics></math>)</li>
+            <li>They are far from the center horizontally (optimize
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">|</mo><mi>p</mi><mi>o</mi><mi>i</mi><mi>n</mi><mi>t</mi><mi>.</mi><mi>x</mi><mo>−</mo><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi><mi>.</mi><mi>x</mi><mo stretchy="false" form="prefix">|</mo></mrow><annotation encoding="application/x-tex">|point.x - center.x|</annotation></semantics></math>)</li>
+            <li>They are far from eachother horizontally (optimize
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false" form="prefix">|</mo><mi>p</mi><mi>o</mi><mi>i</mi><mi>n</mi><msub><mi>t</mi><mi>a</mi></msub><mi>.</mi><mi>x</mi><mo>−</mo><mi>p</mi><mi>o</mi><mi>i</mi><mi>n</mi><msub><mi>t</mi><mi>b</mi></msub><mi>.</mi><mi>x</mi><mo stretchy="false" form="prefix">|</mo></mrow><annotation encoding="application/x-tex">|point_a.x - point_b.x|</annotation></semantics></math>)</li>
+            </ol>
+            <p>First, to find the
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><msub><mi>r</mi><mi>x</mi></msub></mrow><annotation encoding="application/x-tex">center_x</annotation></semantics></math>,
+            we take the average x value of all the points in the
+            contour.</p>
+            <div class="sourceCode" id="cb13"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="dt">double</span> center_x <span class="op">=</span> <span class="dv">0</span><span class="op">;</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="bu">Point</span> point<span class="op">:</span> points2f<span class="op">.</span><span class="fu">toList</span><span class="op">()){</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    center_x <span class="op">+=</span> point<span class="op">.</span><span class="fu">x</span><span class="op">;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>center_x <span class="op">/=</span> points2f<span class="op">.</span><span class="fu">size</span><span class="op">().</span><span class="fu">area</span><span class="op">();</span></span></code></pre></div>
+            <p>Then, to find our first top corner, we score each point
+            based on a weighted combination of their y values (criterion
+            2) and distance from center (criterion 3), and pick the best
+            one.</p>
+            <div class="sourceCode" id="cb14"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="dt">double</span> max_primary_score <span class="op">=</span> <span class="bu">Double</span><span class="op">.</span><span class="fu">NEGATIVE_INFINITY</span><span class="op">;</span></span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Point</span> primary_top_point <span class="op">=</span> <span class="kw">null</span><span class="op">;</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="bu">Point</span> point<span class="op">:</span> points2f<span class="op">.</span><span class="fu">toList</span><span class="op">()){</span></span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// bias to be far on the x axis</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">double</span> score <span class="op">=</span> <span class="op">-</span>point<span class="op">.</span><span class="fu">y</span> <span class="op">+</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span><span class="op">(</span>center_x <span class="op">-</span> point<span class="op">.</span><span class="fu">x</span><span class="op">)</span> <span class="op">*</span> top_distance_weight<span class="op">;</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>score <span class="op">&gt;</span> max_primary_score<span class="op">){</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>        max_primary_score <span class="op">=</span> score<span class="op">;</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>        top_x <span class="op">=</span> point<span class="op">.</span><span class="fu">x</span><span class="op">;</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>        primary_top_point <span class="op">=</span> point<span class="op">;</span></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+            <p>We do the same for the second point, except using a
+            weighted combination of their y values (criterion 2) and
+            distance from the first point (criterion 4).</p>
+            <div class="sourceCode" id="cb15"><pre
+            class="sourceCode java"><code class="sourceCode java"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="dt">double</span> max_secondary_score <span class="op">=</span> <span class="bu">Double</span><span class="op">.</span><span class="fu">NEGATIVE_INFINITY</span><span class="op">;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Point</span> secondary_top_point <span class="op">=</span> <span class="kw">null</span><span class="op">;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span><span class="op">(</span><span class="bu">Point</span> point<span class="op">:</span> points2f<span class="op">.</span><span class="fu">toList</span><span class="op">()){</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    <span class="co">// bias to be far on the x axis</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="dt">double</span> score <span class="op">=</span> <span class="op">-</span>point<span class="op">.</span><span class="fu">y</span> <span class="op">+</span> <span class="bu">Math</span><span class="op">.</span><span class="fu">abs</span><span class="op">(</span>top_x <span class="op">-</span> point<span class="op">.</span><span class="fu">x</span><span class="op">)</span> <span class="op">*</span> top2_distance_weight<span class="op">;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="op">(</span>score <span class="op">&gt;</span> max_secondary_score<span class="op">){</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        max_secondary_score <span class="op">=</span> score<span class="op">;</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>        secondary_top_point <span class="op">=</span> point<span class="op">;</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    <span class="op">}</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="op">}</span></span></code></pre></div>
+            <h2 id="calculating-the-samples-pose">Calculating the
+            Sample’s Pose</h2>
+            <p>Now that we have the sample’s top two corners, we can get
+            some more information about it.</p>
+            <section id="screen---world-calculations" class="infobox">
+            <h3>Screen -&gt; World calculations?</h3>
+            <p>See the <a
+            href="https://github.com/24090/IntoTheDeep/blob/main/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/vision/Camera.java#L64"><code
+            class="sourceCode java">Camera<span class="op">.</span><span class="fu">uv2world</span></code>
+            function in our Camera.java file</a>. It’s just a little bit
+            of math which applies the reprojection matrix to the screen
+            coordinate you give it.</p>
+            </section>
+            <p>Since we can get the world coordinates from the screen
+            coordinates (that was the point of our calibration), we can
+            get the two points of the sample in world coordinates, and
+            from there, the sample world center and angle.</p>
+            <p>Here’s a visualization (try moving the black points
+            around)
+            <iframe src="https://www.desmos.com/calculator/3af8j3rxsw?embed" style="display: block; margin: auto; aspect-ratio:1; width: min(90%, 500px);border: 1px solid #ccc" frameborder=0></iframe>
+            This is what the math does:</p>
+            <ul class="incremental">
+            <li>Get the distance between the two points (using
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><msqrt><mrow><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>x</mi></msub><mo>−</mo><msub><mi>b</mi><mi>x</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup><mo>+</mo><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>y</mi></msub><mo>−</mo><msub><mi>b</mi><mi>y</mi></msub><msup><mo stretchy="false" form="postfix">)</mo><mn>2</mn></msup></mrow></msqrt><annotation encoding="application/x-tex">\sqrt{(a_x-b_x)^2 + (a_y-b_y)^2}</annotation></semantics></math>)
+            <ul class="incremental">
+            <li>If in an acceptable range of
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1.5</mn><mrow><mi mathvariant="normal">i</mi><mi mathvariant="normal">n</mi></mrow></mrow><annotation encoding="application/x-tex">1.5 \mathrm{in}</annotation></semantics></math>,
+            classify the side as short</li>
+            <li>If in an acceptable range of
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3.5</mn><mrow><mi mathvariant="normal">i</mi><mi mathvariant="normal">n</mi></mrow></mrow><annotation encoding="application/x-tex">3.5 \mathrm{in}</annotation></semantics></math>,
+            classify the side as long</li>
+            <li>Otherwise, ignore this pair of points</li>
+            </ul></li>
+            <li>To get the center coordinate:
+            <ol class="incremental" type="1">
+            <li>Get the slope between the points, rotated
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>90</mn><mi>º</mi></mrow><annotation encoding="application/x-tex">90º</annotation></semantics></math>,
+            using
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mfrac><mrow><mi>−</mi><mo stretchy="false" form="prefix">(</mo><msub><mi>a</mi><mi>x</mi></msub><mo>−</mo><msub><mi>b</mi><mi>x</mi></msub><mo stretchy="false" form="postfix">)</mo></mrow><mrow><msub><mi>a</mi><mi>y</mi></msub><mo>−</mo><msub><mi>b</mi><mi>y</mi></msub></mrow></mfrac><annotation encoding="application/x-tex">\frac{-(a_x-b_x)}{a_y-b_y}</annotation></semantics></math></li>
+            <li>Create a unit vector based off of this slope,
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mfrac><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><mn>1</mn></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow><msqrt><mrow><mn>1</mn><mo>+</mo><msup><mrow><mi mathvariant="normal">s</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">o</mi><mi mathvariant="normal">p</mi><mi mathvariant="normal">e</mi></mrow><mn>2</mn></msup></mrow></msqrt></mfrac><annotation encoding="application/x-tex">\frac{\begin{bmatrix}1\\\mathrm {slope}\end{bmatrix}}{\sqrt{1 + \mathrm{slope}^2}}</annotation></semantics></math></li>
+            <li>If the vector points upwards, multiply it by
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>−</mi><mn>1</mn></mrow><annotation encoding="application/x-tex">-1</annotation></semantics></math>
+            to make it point downards instead.</li>
+            <li>Scale the vector by
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mfrac><mrow><mn>1.5</mn><mrow><mi mathvariant="normal">i</mi><mi mathvariant="normal">n</mi></mrow></mrow><mn>2</mn></mfrac><annotation encoding="application/x-tex">\frac{1.5 \mathrm{in}}{2}</annotation></semantics></math>
+            if it’s a long side or
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mfrac><mrow><mn>3.5</mn><mrow><mi mathvariant="normal">i</mi><mi mathvariant="normal">n</mi></mrow></mrow><mn>2</mn></mfrac><annotation encoding="application/x-tex">\frac{3.5 \mathrm{in}}{2}</annotation></semantics></math>
+            if it’s a short side</li>
+            <li>Add the vector to the center of points
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>a</mi><annotation encoding="application/x-tex">a</annotation></semantics></math>
+            and
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>b</mi><annotation encoding="application/x-tex">b</annotation></semantics></math>,
+            giving
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">c</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">e</mi><mi mathvariant="normal">r</mi></mrow><mo>=</mo><mrow><mo stretchy="true" form="prefix">[</mo><mtable><mtr><mtd columnalign="center" style="text-align: center"><mfrac><mrow><msub><mi>a</mi><mi>x</mi></msub><mo>+</mo><msub><mi>b</mi><mi>x</mi></msub></mrow><mn>2</mn></mfrac><mo>+</mo><msub><mi>v</mi><mi>x</mi></msub></mtd></mtr><mtr><mtd columnalign="center" style="text-align: center"><mfrac><mrow><msub><mi>a</mi><mi>y</mi></msub><mo>+</mo><msub><mi>b</mi><mi>y</mi></msub></mrow><mn>2</mn></mfrac><mo>+</mo><msub><mi>v</mi><mi>y</mi></msub></mtd></mtr></mtable><mo stretchy="true" form="postfix">]</mo></mrow></mrow><annotation encoding="application/x-tex">\mathrm{center} =
+            \begin{bmatrix}
+            \frac{a_x + b_x}{2} + v_x
+            \\
+            \frac{a_y + b_y}{2} + v_y
+            \end{bmatrix}</annotation></semantics></math></li>
+            </ol></li>
+            <li>Get the angle between the points (using
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi>arctan</mi><mo>&#8289;</mo></mrow><mo stretchy="false" form="prefix">(</mo><mfrac><mrow><msub><mi>a</mi><mi>y</mi></msub><mo>−</mo><msub><mi>b</mi><mi>y</mi></msub></mrow><mrow><msub><mi>a</mi><mi>x</mi></msub><mo>−</mo><msub><mi>b</mi><mi>x</mi></msub></mrow></mfrac><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">\arctan(\frac{a_y-b_y}{a_x-b_x})</annotation></semantics></math>)
+            <ul class="incremental">
+            <li>If it’s a short side, add
+            <math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>90</mn><mi>º</mi></mrow><annotation encoding="application/x-tex">90º</annotation></semantics></math>
+            (<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mi>π</mi><mn>2</mn></mfrac><mrow><mi mathvariant="normal">r</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">d</mi></mrow></mrow><annotation encoding="application/x-tex">\frac{\pi}{2} \mathrm {rad}</annotation></semantics></math>)
+            to it.</li>
+            </ul></li>
+            </ul>
+            <h2 id="grabbing-the-sample">Grabbing the sample</h2>
+            <p>Now that you know exactly where the sample is and how it
+            is rotated, all that’s left is to grab it. This requires
+            precise control. We used Pedro Pathing for movement
+            (although it often didn’t work well for small movements) and
+            a P controller for our linear slide. We found we didn’t even
+            need to rotate the claw exactly, our setup worked well
+            enough with just 90 degree rotations.</p>
+            <h2 id="limitations">Limitations</h2>
+            <p>This article is just an overview of how
+            <strong><em>we</em></strong> implemented vision for the
+            game. It can definitely be improved upon, and likely won’t
+            work outside of our specific use case. The system wouldn’t
+            work, for example, if the camera was moving or if we were
+            doing something other than looking for samples in the
+            submersible.</p>
+        </main>
+    </body>
+</html>
